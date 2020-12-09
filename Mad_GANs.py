@@ -60,8 +60,10 @@ G = []
 for i in range(num_gen):
     G.append(torch.nn.Sequential(
         torch.nn.Linear(Z_dim, h_dim),
+        torch.nn.BatchNorm2d(),
         torch.nn.PReLU(),
         torch.nn.Linear(h_dim, h_dim),
+        torch.nn.BatchNorm2d(),
         torch.nn.PReLU(),
         torch.nn.Linear(h_dim, X_dim),
         torch.nn.Sigmoid()
@@ -69,8 +71,10 @@ for i in range(num_gen):
 
 D = torch.nn.Sequential(
     torch.nn.Linear(X_dim, h_dim),
+    torch.nn.BatchNorm2d(),
     torch.nn.LeakyReLU(0.2),
     torch.nn.Linear(h_dim, h_dim),
+    torch.nn.BatchNorm2d(),
     torch.nn.LeakyReLU(0.2),
     torch.nn.Linear(h_dim, num_gen + 1),
     torch.nn.Softmax()
@@ -107,7 +111,7 @@ reset_grad()
 
 
 data_index = 0
-for it in range(198000):
+for it in range(1000):
     if ((data_index + 1)*mb_size>len(data)):
         data_index = 0
 
