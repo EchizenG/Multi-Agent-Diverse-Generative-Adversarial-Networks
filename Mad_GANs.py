@@ -160,7 +160,7 @@ for it in range(1000):
         
     data_index = data_index + 1
     # Print and plot every now and then
-    if it % 1000 == 0:
+    if it % 100 == 0:
         print('Iter-{}; D_loss: {}; G_loss: {}'.format(it, Total_D_loss.data.cpu().numpy(), Total_G_loss.data.cpu().numpy()))
 
 
