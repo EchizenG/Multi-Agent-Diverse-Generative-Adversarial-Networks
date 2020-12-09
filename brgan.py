@@ -22,6 +22,8 @@ import torchvision.transforms as transforms
 import random
 from random import randint
 from sklearn.mixture import GaussianMixture
+from transformer import DataTransformer
+import pandas as pd
 device = torch.device('cpu')
 # get_ipython().run_line_magic('matplotlib', 'inline')
 
@@ -31,26 +33,34 @@ device = torch.device('cpu')
 
 # defining parameters for the training
 mb_size = 128 # Batch Size
-Z_dim = 64  # Length of noise vector
-X_dim = 1  # Input Length
+Z_dim = 11  # Length of noise vector
+X_dim = 11  # Input Length
 h_dim = 128  # Hidden Dimension
 lr = 1e-4    # Learning Rate
-num_gen = 4
+# num_gen = 4
 
 
 # In[3]:
 
 
-np.random.seed(1)
-gmm = GaussianMixture(n_components=5, covariance_type='spherical')
-gmm.means_ = np.array([[10], [20], [60], [80], [110]])
-gmm.covariances_ = np.array([[3], [3], [2], [2], [1]]) ** 2
-gmm.weights_ = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
+# np.random.seed(1)
+# gmm = GaussianMixture(n_components=5, covariance_type='spherical')
+# gmm.means_ = np.array([[10], [20], [60], [80], [110]])
+# gmm.covariances_ = np.array([[3], [3], [2], [2], [1]]) ** 2
+# gmm.weights_ = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
 
-X = gmm.sample(2000)
-data = X[0]
-data = (data - min(X[0]))/(max(X[0])-min(X[0]))
-plt.hist(data, 200000, density=False, histtype='stepfilled', alpha=1)
+# X = gmm.sample(2000)
+# data = X[0]
+# data = (data - min(X[0]))/(max(X[0])-min(X[0]))
+# plt.hist(data, 200000, density=False, histtype='stepfilled', alpha=1)
+
+
+train_data = pd.read_csv('data/testgroup.csv')
+transformer = DataTransformer()
+discrete_columns=tuple()
+num_gen = train_data.shape[1]-1
+transformer.fit(train_data, discrete_columns)
+train_data = transformer.transform(train_data)
 
 
 # In[4]:
@@ -111,26 +121,32 @@ reset_grad()
 
 
 data_index = 0
+data = train_data
 for it in range(1000):
     if ((data_index + 1)*mb_size>len(data)):
         data_index = 0
 
-    X = torch.from_numpy(np.array(data[data_index*mb_size : (data_index + 1)*mb_size]))
-    X = X.view(mb_size, 1)
-    X = X.type(torch.FloatTensor)
-    X = X.to(device)
+    data = torch.from_numpy(np.array(data[data_index*mb_size : (data_index + 1)*mb_size]))
+
+    
     Total_D_loss = 0
     for i in range(num_gen):
         # Dicriminator forward-loss-backward-update
         #forward pass
         z = torch.FloatTensor(mb_size, Z_dim).uniform_(-1, 1)
         z = z.to(device)
+
+        X = data[:,i*X_dim:(i+1)*X_dim]
+        X = X.view(mb_size, X_dim)
+        X = X.type(torch.FloatTensor)
+        X = X.to(device)
+
         G_sample = G[i](z)
         D_real = D(X)
         D_fake = D(G_sample)
         # Calculate the loss
-        D_loss_real = loss(D_real,label_D.fill_(num_gen + 0.1*randint(-1,1)))
-        D_loss_fake = loss(D_fake, label_G.fill_(i + 0.1*randint(-1,1)))
+        D_loss_real = - torch.mean(D_real)#loss(D_real, label_D.fill_(num_gen + 0.1*randint(-1,1)))#TODO
+        D_loss_fake = torch.mean(D_fake)#loss(D_fake, label_G.fill_(i + 0.1*randint(-1,1)))#TODO
         D_loss = D_loss_real + D_loss_fake
         Total_D_loss = D_loss + Total_D_loss
         # Calulate and update gradients of discriminator
@@ -150,7 +166,7 @@ for it in range(1000):
         G_sample = G[i](z)
         D_fake = D(G_sample)
 
-        G_loss = loss(D_fake, label_D.fill_(num_gen + 0.1*randint(-1,1)))
+        G_loss = torch.mean(D_fake)#loss(D_fake, label_D.fill_(num_gen + 0.1*randint(-1,1)))
         Total_G_loss = G_loss + Total_G_loss
         G_loss.backward()
         G_solver[i].step()
