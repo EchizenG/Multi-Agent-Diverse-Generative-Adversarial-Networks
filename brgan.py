@@ -188,10 +188,11 @@ for it in range(1000):
 import numpy as np
 final = np.zeros(1500*mb_size, dtype = float)
 for i in range(1500):
-    z = torch.FloatTensor(64, Z_dim).uniform_(-1, 1)
+    z = torch.FloatTensor(mb_size, Z_dim).uniform_(-1, 1)
     z = z.to(device)
-    l = G[randint(0,num_gen-1)](z).cpu().detach().numpy()
-    final[i*mb_size : ((i+ 1)*mb_size -1)] = l[0]
-p1 = plt.hist(final, 500, density=True, histtype='bar', alpha=0.5)
-p2 = plt.hist(data, 500, density=True, histtype='bar', alpha=0.5)
+    for j in range(num_gen):
+        l[j] = G[j](z).cpu().detach().numpy()
+    final[i*mb_size : ((i + 1)*mb_size -1)] = transformer.inverse_transform(l, None)
+# p1 = plt.hist(final, 500, density=True, histtype='bar', alpha=0.5)
+# p2 = plt.hist(data, 500, density=True, histtype='bar', alpha=0.5)
 
