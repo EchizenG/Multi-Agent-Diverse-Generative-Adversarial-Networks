@@ -24,7 +24,7 @@ from random import randint
 from sklearn.mixture import GaussianMixture
 from transformer import DataTransformer
 import pandas as pd
-device = torch.device('cpu')
+device = torch.device('cuda')
 # get_ipython().run_line_magic('matplotlib', 'inline')
 
 
@@ -55,10 +55,10 @@ lr = 1e-2    # Learning Rate
 # plt.hist(data, 200000, density=False, histtype='stepfilled', alpha=1)
 
 
-train_data = pd.read_csv('data/testsingle.csv')
+train_data = pd.read_csv('data/testone.csv')
 transformer = DataTransformer()
 discrete_columns=tuple()
-num_gen = train_data.shape[1]-1
+num_gen = train_data.shape[1]
 transformer.fit(train_data, discrete_columns)
 train_data = transformer.transform(train_data)
 
@@ -94,26 +94,13 @@ class latterNet(torch.nn.Module):
         torch.nn.Linear(h_dim, X_dim),
         torch.nn.Sigmoid()
         )
-        # self.hidden = torch.nn.Linear(n_hidden, n_hidden)   # hidden layer
-        # self.predict = torch.nn.Linear(n_hidden, n_output)   # output layer
-
     def forward(self, x):
         x = self.latter(x)
         return x
 
 G = []
 for i in range(num_gen):
-    G.append(latterNet().cpu())
-    # G.append(torch.nn.Sequential(
-    #     torch.nn.Linear(Z_dim, h_dim),
-    #     torch.nn.BatchNorm1d(h_dim),
-    #     torch.nn.PReLU(),
-    #     torch.nn.Linear(h_dim, h_dim),
-    #     torch.nn.BatchNorm1d(h_dim),
-    #     torch.nn.PReLU(),
-    #     torch.nn.Linear(h_dim, X_dim),
-    #     torch.nn.Sigmoid()
-    # ).cpu())
+    G.append(latterNet().cuda())
 
 D = torch.nn.Sequential(
     torch.nn.Linear(X_dim, h_dim),
@@ -124,7 +111,7 @@ D = torch.nn.Sequential(
     torch.nn.LeakyReLU(0.2),
     torch.nn.Linear(h_dim, num_gen + 1),
     torch.nn.Softmax()
-).cpu()
+).cuda()
 
 
 # In[5]:
@@ -161,7 +148,7 @@ reset_grad()
 
 data_index = 0
 data = train_data
-for it in range(1000):
+for it in range(198000):
     if ((data_index + 1)*mb_size>len(data)):
         data_index = 0
 
@@ -224,7 +211,7 @@ for it in range(1000):
         
     data_index = data_index + 1
     # Print and plot every now and then
-    if it % 100 == 0:
+    if it % 10000 == 0:
         print('Iter-{}; D_loss: {}; G_loss: {}'.format(it, D_loss.data.cpu().numpy(), G_loss.data.cpu().numpy()))
 
 
@@ -244,6 +231,6 @@ for i in range(1500):
     final[i*mb_size : ((i + 1)*mb_size)] = transformer.inverse_transform(l.numpy(), None)
 final = pd.DataFrame(final)
 final.to_csv('out.csv')
-# p1 = plt.hist(final, 500, density=True, histtype='bar', alpha=0.5)
-# p2 = plt.hist(data, 500, density=True, histtype='bar', alpha=0.5)
-
+p1 = plt.hist(final, 500, density=True, histtype='bar', alpha=0.5)
+p2 = plt.hist(data, 500, density=True, histtype='bar', alpha=0.5)
+plt.show()
