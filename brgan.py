@@ -32,11 +32,11 @@ device = torch.device('cpu')
 
 
 # defining parameters for the training
-mb_size = 128 # Batch Size
+mb_size = 2 # Batch Size
 Z_dim = 11  # Length of noise vector
 X_dim = 11  # Input Length
 h_dim = 128  # Hidden Dimension
-lr = 1e-4    # Learning Rate
+lr = 1e-2    # Learning Rate
 # num_gen = 4
 
 
@@ -55,7 +55,7 @@ lr = 1e-4    # Learning Rate
 # plt.hist(data, 200000, density=False, histtype='stepfilled', alpha=1)
 
 
-train_data = pd.read_csv('data/testgroup.csv')
+train_data = pd.read_csv('data/testsingle.csv')
 transformer = DataTransformer()
 discrete_columns=tuple()
 num_gen = train_data.shape[1]-1
@@ -65,19 +65,55 @@ train_data = transformer.transform(train_data)
 
 # In[4]:
 
-
-G = []
-for i in range(num_gen):
-    G.append(torch.nn.Sequential(
+class formerNet(torch.nn.Module):
+    def __init__(self):
+        """
+        In the constructor we instantiate five parameters and assign them as members.
+        """
+        super().__init__()
+        self.former = torch.nn.Sequential(
         torch.nn.Linear(Z_dim, h_dim),
         torch.nn.BatchNorm1d(h_dim),
-        torch.nn.PReLU(),
+        torch.nn.PReLU()
+        )
+    def forward(self,x):
+        x = self.former(x)             # linear output
+        return x
+
+class latterNet(torch.nn.Module):
+    def __init__(self):
+        """
+        In the constructor we instantiate five parameters and assign them as members.
+        """
+        super().__init__()
+        self.latter = torch.nn.Sequential(
+        formerNet(),
         torch.nn.Linear(h_dim, h_dim),
         torch.nn.BatchNorm1d(h_dim),
         torch.nn.PReLU(),
         torch.nn.Linear(h_dim, X_dim),
         torch.nn.Sigmoid()
-    ).cpu())
+        )
+        # self.hidden = torch.nn.Linear(n_hidden, n_hidden)   # hidden layer
+        # self.predict = torch.nn.Linear(n_hidden, n_output)   # output layer
+
+    def forward(self, x):
+        x = self.latter(x)
+        return x
+
+G = []
+for i in range(num_gen):
+    G.append(latterNet().cpu())
+    # G.append(torch.nn.Sequential(
+    #     torch.nn.Linear(Z_dim, h_dim),
+    #     torch.nn.BatchNorm1d(h_dim),
+    #     torch.nn.PReLU(),
+    #     torch.nn.Linear(h_dim, h_dim),
+    #     torch.nn.BatchNorm1d(h_dim),
+    #     torch.nn.PReLU(),
+    #     torch.nn.Linear(h_dim, X_dim),
+    #     torch.nn.Sigmoid()
+    # ).cpu())
 
 D = torch.nn.Sequential(
     torch.nn.Linear(X_dim, h_dim),
@@ -110,7 +146,10 @@ label_D = label_D.to(device)
 
 
 # Reset the gradients to zero
-params = [G[0], G[1], G[2], G[3], D]
+params = []
+for i in range(num_gen):
+    params.append(G[i])
+params.append(D)
 def reset_grad():
     for net in params:
         net.zero_grad()
@@ -136,7 +175,7 @@ for it in range(1000):
         z = torch.FloatTensor(mb_size, Z_dim).uniform_(-1, 1)
         z = z.to(device)
 
-        X = data[:,i*X_dim:(i+1)*X_dim]
+        X = data[:, i*X_dim : (i+1)*X_dim]
         X = X.view(mb_size, X_dim)
         X = X.type(torch.FloatTensor)
         X = X.to(device)
@@ -148,36 +187,45 @@ for it in range(1000):
         D_loss_real = - torch.mean(D_real)#loss(D_real, label_D.fill_(num_gen + 0.1*randint(-1,1)))#TODO
         D_loss_fake = torch.mean(D_fake)#loss(D_fake, label_G.fill_(i + 0.1*randint(-1,1)))#TODO
         D_loss = D_loss_real + D_loss_fake
-        Total_D_loss = D_loss + Total_D_loss
+        # Total_D_loss = D_loss + Total_D_loss
         # Calulate and update gradients of discriminator
+        D_solver.zero_grad()
         D_loss.backward()
         D_solver.step()
 
         # reset gradient
-        reset_grad()
+        # reset_grad()
 
     # Generator forward-loss-backward-update
     
     Total_G_loss = 0
     for i in range(num_gen):
-        
         z = torch.FloatTensor(mb_size, Z_dim).uniform_(-1, 1)
         z = z.to(device)
         G_sample = G[i](z)
         D_fake = D(G_sample)
-
-        G_loss = torch.mean(D_fake)#loss(D_fake, label_D.fill_(num_gen + 0.1*randint(-1,1)))
-        Total_G_loss = G_loss + Total_G_loss
+        G_loss = -torch.mean(D_fake)#loss(D_fake, label_D.fill_(num_gen + 0.1*randint(-1,1)))
+        # Total_G_loss = G_loss + Total_G_loss
+        G_solver[i].zero_grad()
         G_loss.backward()
         G_solver[i].step()
 
+        commonDict = {k: v for k, v in G[i].state_dict().items() if 'former' in k}
+
+        for j in range(num_gen):
+            targetDict = G[j].state_dict()
+            targetDict.update(commonDict)
+            G[j].load_state_dict(targetDict)
+
         # reset gradient
-        reset_grad()
+        # reset_grad()
+
+        # TODO: update common layer
         
     data_index = data_index + 1
     # Print and plot every now and then
     if it % 100 == 0:
-        print('Iter-{}; D_loss: {}; G_loss: {}'.format(it, Total_D_loss.data.cpu().numpy(), Total_G_loss.data.cpu().numpy()))
+        print('Iter-{}; D_loss: {}; G_loss: {}'.format(it, D_loss.data.cpu().numpy(), G_loss.data.cpu().numpy()))
 
 
 #  Let us see the images generated by the generator:
@@ -186,7 +234,7 @@ for it in range(1000):
 
 
 import numpy as np
-final = np.zeros((1500*mb_size,7), dtype = float)
+final = np.zeros((1500*mb_size,num_gen+1), dtype = float)
 l = torch.zeros(mb_size, Z_dim)
 for i in range(1500):
     z = torch.FloatTensor(mb_size, Z_dim).uniform_(-1, 1)
