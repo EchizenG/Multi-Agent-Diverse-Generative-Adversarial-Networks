@@ -36,7 +36,7 @@ mb_size = 2 # Batch Size
 Z_dim = 11  # Length of noise vector
 X_dim = 11  # Input Length
 h_dim = 256  # Hidden Dimension
-lr = 1e-2    # Learning Rate
+lr = 1e-4    # Learning Rate
 # num_gen = 4
 
 
