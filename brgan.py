@@ -35,7 +35,7 @@ device = torch.device('cuda')
 mb_size = 2 # Batch Size
 Z_dim = 11  # Length of noise vector
 X_dim = 11  # Input Length
-h_dim = 128  # Hidden Dimension
+h_dim = 256  # Hidden Dimension
 lr = 1e-2    # Learning Rate
 # num_gen = 4
 
@@ -103,15 +103,14 @@ for i in range(num_gen):
     G.append(latterNet().cuda())
 
 D = torch.nn.Sequential(
-    torch.nn.Linear(X_dim, h_dim),
-    torch.nn.BatchNorm1d(h_dim),
+    torch.nn.Linear(Z_dim, h_dim),
     torch.nn.LeakyReLU(0.2),
+    torch.nn.Dropout(0.5),
     torch.nn.Linear(h_dim, h_dim),
-    torch.nn.BatchNorm1d(h_dim),
     torch.nn.LeakyReLU(0.2),
-    torch.nn.Linear(h_dim, num_gen + 1),
-    torch.nn.Softmax()
-).cuda()
+    torch.nn.Dropout(0.5),
+    torch.nn.Linear(h_dim, 1)
+    ).cuda()
 
 
 # In[5]:
